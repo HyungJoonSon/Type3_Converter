@@ -12,5 +12,10 @@ public class Main {
         nfa.setRegEx(regEx);
         nfa.re2nfa();
         nfa.print();
+
+        DeterministicFiniteAutomata dfa = new DeterministicFiniteAutomata();
+        dfa.setInformationByNFA(nfa.getGraph(), nfa.getSymbols());
+        dfa.createDFA();
+        dfa.printDFA();
     }
 }

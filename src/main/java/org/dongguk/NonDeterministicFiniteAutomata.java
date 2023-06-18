@@ -14,13 +14,13 @@ public class NonDeterministicFiniteAutomata {
     private int restate = 0;
     private String regExByPostFix;
 
-    private StatePair startPair;
+    private StatePair graph;
     private List<Character> symbols;
     private List<Integer> endIndexes;
 
     public NonDeterministicFiniteAutomata() {
         this.regExByPostFix = null;
-        this.startPair = null;
+        this.graph = null;
         this.symbols = new ArrayList<>();
         this.endIndexes = new ArrayList<>();
     }
@@ -35,16 +35,6 @@ public class NonDeterministicFiniteAutomata {
             temp_symbols.add(regEx.charAt(i));
         }
         symbols.addAll(temp_symbols);
-//        symbols.add('ε');
-
-        // Terminal Symbol 출력
-        System.out.print("TerminalSet = { ");
-        symbols.forEach(symbol -> {
-            if (symbol != symbols.get(symbols.size() - 1))
-                System.out.print(symbol + ", ");
-            else
-                System.out.println(symbol + " }");
-        });
 
         regExByPostFix = postfix(addJoinSymbolToRegEx(regEx));
     }
@@ -57,24 +47,24 @@ public class NonDeterministicFiniteAutomata {
             switch (c) {
                 case '*' -> {
                     temp = stack.pop();
-                    this.startPair = Constructor.constructStarClosure(temp);
-                    stack.push(startPair);
+                    this.graph = Constructor.constructStarClosure(temp);
+                    stack.push(graph);
                 }
                 case '+' -> {
                     right = stack.pop();
                     left = stack.pop();
-                    this.startPair = Constructor.constructNfaForOR(left, right);
-                    stack.push(startPair);
+                    this.graph = Constructor.constructNfaForOR(left, right);
+                    stack.push(graph);
                 }
                 case '•' -> {
                     right = stack.pop();
                     left = stack.pop();
-                    this.startPair = Constructor.constructNfaForConnector(left, right);
-                    stack.push(startPair);
+                    this.graph = Constructor.constructNfaForConnector(left, right);
+                    stack.push(graph);
                 }
                 default -> {
-                    this.startPair = Constructor.constructNfaForSingleCharacter(c);
-                    stack.push(startPair);
+                    this.graph = Constructor.constructNfaForSingleCharacter(c);
+                    stack.push(graph);
                 }
             }
         }
@@ -153,10 +143,10 @@ public class NonDeterministicFiniteAutomata {
 
 
     public void print() {
-        relocationStateIndex(startPair.getStartNode());
-        relocationStateVisited(startPair.getStartNode());
+        relocationStateIndex(graph.getStartNode());
+        relocationStateVisited(graph.getStartNode());
 
-
+        System.out.println("--------NFA--------");
         System.out.print("StateSet = { ");
         for (int i = 0; i < restate; i++) {
             String stateName = "q" + String.format("%03d", i);
@@ -175,10 +165,10 @@ public class NonDeterministicFiniteAutomata {
         });
 
         System.out.println("DeltaFunctions = { ");
-        printState(startPair.getStartNode());
+        printState(graph.getStartNode());
         System.out.println("}");
 
-        System.out.println("StartState = { q" + String.format("%03d", startPair.getStartNode().getIndex()) + " }");
+        System.out.println("StartState = { q" + String.format("%03d", graph.getStartNode().getIndex()) + " }");
         System.out.print("FinalStateSet = { ");
         for (int endIndex : endIndexes) {
             String endStateName = "q" + String.format("%03d", endIndex);
@@ -187,7 +177,8 @@ public class NonDeterministicFiniteAutomata {
             else
                 System.out.println(endStateName + " }");
         }
-        relocationStateVisited(startPair.getStartNode());
+        relocationStateVisited(graph.getStartNode());
+        System.out.println("--------NFA--------");
     }
 
     // Check Symbol [a-zA-z0-9]

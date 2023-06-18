@@ -6,9 +6,11 @@ public class Main {
     public static void main(String[] args) {
         Scanner in = new Scanner(System.in);
         System.out.println("input a regular expression");
-        String re = in.nextLine();
+        String regEx = in.nextLine();
 
-        NonDeterministicFiniteAutomata nfa = new NonDeterministicFiniteAutomata(re);
+        NonDeterministicFiniteAutomata nfa = new NonDeterministicFiniteAutomata();
+        nfa.setRegEx(regEx);
         nfa.re2nfa();
+        nfa.print();
     }
 }

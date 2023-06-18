@@ -1,34 +1,38 @@
 package org.dongguk;
 
 
-import org.dongguk.common.Cell;
-import org.dongguk.common.Pair;
+import lombok.Getter;
+import lombok.Setter;
+import org.dongguk.common.State;
+import org.dongguk.common.StatePair;
 
 import java.util.*;
 
+@Getter
+@Setter
 public class NonDeterministicFiniteAutomata {
+    private int restate = 0;
+    private String regExByPostFix;
 
-    private String re;
-    private String reJoined;
-    private String rePostFix;
-
+    private StatePair startPair;
     private List<Character> symbols;
-    private Pair pair;
+    private List<Integer> endIndexes;
 
-    public NonDeterministicFiniteAutomata(String re) {
-        this.re = re;
-        this.reJoined = null;
-        this.rePostFix = null;
-        symbols = new ArrayList<>();
+    public NonDeterministicFiniteAutomata() {
+        this.regExByPostFix = null;
+        this.startPair = null;
+        this.symbols = new ArrayList<>();
+        this.endIndexes = new ArrayList<>();
+    }
 
-
+    public void setRegEx(String regEx) {
         Set<Character> temp_symbols = new HashSet<>();
 
         // Terminal Symbol Find
-        for (int i = 0; i < re.length(); i++) {
-            if (!isSymbol(re.charAt(i)))
+        for (int i = 0; i < regEx.length(); i++) {
+            if (!isSymbol(regEx.charAt(i)))
                 continue;
-            temp_symbols.add(re.charAt(i));
+            temp_symbols.add(regEx.charAt(i));
         }
         symbols.addAll(temp_symbols);
 //        symbols.add('ε');
@@ -42,26 +46,51 @@ public class NonDeterministicFiniteAutomata {
                 System.out.println(symbol + " }");
         });
 
-
-        reJoined = add_join_symbol();
-
-        rePostFix = postfix();
-        System.out.println("add PostFix symbol:" + rePostFix);
+        regExByPostFix = postfix(addJoinSymbolToRegEx(regEx));
     }
 
-    private String add_join_symbol() {
-        int length = re.length();
+    public void re2nfa() {
+        StatePair temp, right, left = null;
+
+        Stack<StatePair> stack = new Stack<>();
+        for (char c : regExByPostFix.toCharArray()) {
+            switch (c) {
+                case '*' -> {
+                    temp = stack.pop();
+                    this.startPair = Constructor.constructStarClosure(temp);
+                    stack.push(startPair);
+                }
+                case '+' -> {
+                    right = stack.pop();
+                    left = stack.pop();
+                    this.startPair = Constructor.constructNfaForOR(left, right);
+                    stack.push(startPair);
+                }
+                case '•' -> {
+                    right = stack.pop();
+                    left = stack.pop();
+                    this.startPair = Constructor.constructNfaForConnector(left, right);
+                    stack.push(startPair);
+                }
+                default -> {
+                    this.startPair = Constructor.constructNfaForSingleCharacter(c);
+                    stack.push(startPair);
+                }
+            }
+        }
+    }
+
+    private String addJoinSymbolToRegEx(String regEx) {
+        int length = regEx.length();
         if(length==1) {
-            System.out.println("add join symbol:" + re);
-            reJoined = re;
-            return re;
+            return regEx;
         }
         int return_string_length = 0;
         char return_string[] = new char[2 * length + 2];
         char first, second = '0';
         for (int i = 0; i < length - 1; i++) {
-            first = re.charAt(i);
-            second = re.charAt(i + 1);
+            first = regEx.charAt(i);
+            second = regEx.charAt(i + 1);
             return_string[return_string_length++] = first;
             if (first != '(' && first != '+' && isSymbol(second)) {
                 return_string[return_string_length++] = '•';
@@ -73,15 +102,14 @@ public class NonDeterministicFiniteAutomata {
         return_string[return_string_length++] = second;
         String rString = new String(return_string, 0, return_string_length);
 
-        reJoined = rString;
         return rString;
     }
 
-    private String postfix() {
+    private String postfix(String regExByJoin) {
         StringBuilder temp = new StringBuilder();
         Stack<Character> stk = new Stack<>();
-        for (int i = 0; i < reJoined.length(); i++) {
-            char currentChar = reJoined.charAt(i);
+        for (int i = 0; i < regExByJoin.length(); i++) {
+            char currentChar = regExByJoin.charAt(i);
 
             // Symbol 이라면 그대로 출력
             if (isSymbol(currentChar)) {
@@ -122,42 +150,44 @@ public class NonDeterministicFiniteAutomata {
         return temp.toString();
     }
 
-    public void re2nfa() {
-        this.pair = new Pair();
-        Pair temp = new Pair();
-        Pair right, left;
-        Constructor constructor = new Constructor();
 
-        Stack<Pair> stack = new Stack<>();
-        for (char c : rePostFix.toCharArray()) {
-            switch (c) {
-                case '*' -> {
-                    temp = stack.pop();
-                    this.pair = constructor.constructStarClosure(temp);
-                    stack.push(pair);
-                }
-                case '+' -> {
-                    right = stack.pop();
-                    left = stack.pop();
-                    this.pair = constructor.constructNfaForOR(left, right);
-                    stack.push(pair);
-                }
-                case '.' -> {
-                    right = stack.pop();
-                    left = stack.pop();
-                    this.pair = constructor.constructNfaForConnector(left, right);
-                    stack.push(pair);
-                }
-                default -> {
-                    this.pair = constructor.constructNfaForSingleCharacter(c);
-                    stack.push(pair);
-                }
-            }
-        }
-    }
 
     public void print() {
+        relocationStateIndex(startPair.getStartNode());
+        relocationStateVisited(startPair.getStartNode());
 
+
+        System.out.print("StateSet = { ");
+        for (int i = 0; i < restate; i++) {
+            String stateName = "q" + String.format("%03d", i);
+            if (i != restate - 1)
+                System.out.print(stateName + ", ");
+            else
+                System.out.println(stateName + " }");
+        }
+
+        System.out.print("TerminalSet = { ");
+        symbols.forEach(symbol -> {
+            if (symbol != symbols.get(symbols.size() - 1))
+                System.out.print(symbol + ", ");
+            else
+                System.out.println(symbol + " }");
+        });
+
+        System.out.println("DeltaFunctions = { ");
+        printState(startPair.getStartNode());
+        System.out.println("}");
+
+        System.out.println("StartState = { q" + String.format("%03d", startPair.getStartNode().getIndex()) + " }");
+        System.out.print("FinalStateSet = { ");
+        for (int endIndex : endIndexes) {
+            String endStateName = "q" + String.format("%03d", endIndex);
+            if (endIndex != endIndexes.get(endIndexes.size() - 1))
+                System.out.print(endStateName + ", ");
+            else
+                System.out.println(endStateName + " }");
+        }
+        relocationStateVisited(startPair.getStartNode());
     }
 
     // Check Symbol [a-zA-z0-9]
@@ -175,104 +205,138 @@ public class NonDeterministicFiniteAutomata {
         };
     }
 
-    private static class Constructor {
-        private Manager manager = null;
-
-        public Constructor() {
-            this.manager = new Manager();
+    private void relocationStateIndex(State state) {
+        if (state == null || state.isVisited()) {
+            return;
         }
 
-        public Pair constructStarClosure(Pair pairIn) {
-            Pair pairOut = new Pair();
-            pairOut.startNode = manager.newNfa();
-            pairOut.endNode = manager.newNfa();
+        state.setVisited(true);
+        state.setIndex(restate++);
 
-            pairOut.startNode.next = pairIn.startNode;
-            pairIn.endNode.next = pairOut.endNode;
+        if (state.isEnd())
+            endIndexes.add(state.getIndex());
 
-            pairOut.startNode.next2 = pairOut.endNode;
-            pairIn.endNode.next2 = pairIn.startNode;
+        for (State nextState : state.getStates())
+            relocationStateIndex(nextState);
+    }
+    private void relocationStateVisited(State state) {
+        if (state == null || !state.isVisited()) {
+            return;
+        }
+        state.setVisited(false);
+        for (State nextState : state.getStates())
+            relocationStateVisited(nextState);
+    }
 
-            pairIn.startNode = pairOut.startNode;
-            pairIn.endNode = pairOut.endNode;
-
-            return pairOut;
+    private void printState(State state) {
+        if (state == null || state.isVisited()) {
+            return;
         }
 
-        public Pair constructNfaForSingleCharacter(char c) {
+        state.setVisited(true);
 
-            Pair pairOut = new Pair();
-            pairOut.startNode = manager.newNfa();
-            pairOut.endNode = manager.newNfa();
-            pairOut.startNode.next = pairOut.endNode;
-            pairOut.startNode.setEdge(c);
+        printNfaNode(state);
+        for (State nextState : state.getStates())
+            printState(nextState);
+    }
 
-            return pairOut;
+    private void printNfaNode(State state) {
+        List<State> states = state.getStates();
+        List<Integer> edges = state.getEdges();
+
+        // 현재 존재하는 edge 모두 검색
+        Set<Integer> edgeIndexes = new HashSet<>(edges);
+
+        // edge List 추가
+        Map<Integer, List<Integer>> edgeMap = new HashMap<>();
+        for (int index : edgeIndexes)
+            edgeMap.put(index, new ArrayList<>());
+
+        // edge 마다 다음 State 추가
+        for (int i = 0; i < states.size(); i++) {
+            edgeMap.get(edges.get(i)).add(states.get(i).getIndex());
         }
 
-        public Pair constructNfaForOR(Pair left, Pair right) {
-            Pair pair = new Pair();
-            pair.startNode = manager.newNfa();
-            pair.endNode = manager.newNfa();
+        for (int key : edgeMap.keySet()) {
+            String stateName = "q" + String.format("%03d", state.getIndex());
+            String arcName = (key == -1 ? "ε" : String.valueOf((char) key));
+            System.out.print("\t(" + stateName + ", " + arcName + ") = { ");
 
-            pair.startNode.next = left.startNode;
-            pair.startNode.next2 = right.startNode;
-
-            left.endNode.next = pair.endNode;
-            right.endNode.next = pair.endNode;
-
-            return pair;
-        }
-
-        public Pair constructNfaForConnector(Pair left, Pair right) {
-            Pair pairOut = new Pair();
-            pairOut.startNode = left.startNode;
-            pairOut.endNode = right.endNode;
-
-            left.endNode.next = right.startNode;
-
-            return pairOut;
+            List<Integer> nextStates = edgeMap.get(key);
+            for (int nextState : nextStates) {
+                String nextStateName = "q" + String.format("%03d", nextState);
+                if (nextState != nextStates.get(nextStates.size() - 1))
+                    System.out.print(nextStateName + ", ");
+                else
+                    System.out.println(nextStateName + " }");
+            }
         }
     }
 
-    private static class Manager {
-        private final int NFA_MAX = 256;
-        private Cell[] nfaStatesArr = null;
-        private Stack<Cell> nfaStack = null;
-        private int nextAlloc = 0;
-        private int nfaStates = 0;
+    private static class Constructor {
+        private static int stateIndex = 0;
 
-        public Manager()  {
-            nfaStatesArr = new Cell[NFA_MAX];
-            for (int i = 0; i < NFA_MAX; i++) {
-                nfaStatesArr[i] = new Cell();
-            }
+        public static StatePair constructStarClosure(StatePair pairIn) {
+            // State 2개 추가
+            StatePair pairOut = new StatePair(new State(stateIndex++), new State(stateIndex++));
 
-            nfaStack = new Stack<Cell>();
+            // Arc 4개 추가
+            pairOut.getStartNode().makeEdge(pairIn.getStartNode(), State.EPSILON);
+            pairIn.getEndNode().makeEdge(pairOut.getEndNode(), State.EPSILON);
 
+            pairOut.getStartNode().makeEdge(pairOut.getEndNode(), State.EPSILON);
+            pairIn.getEndNode().makeEdge(pairIn.getStartNode(), State.EPSILON);
+
+            pairIn.getEndNode().setEnd(false);
+            pairOut.getEndNode().setEnd(true);
+
+            return pairOut;
         }
 
-        public Cell newNfa()  {
-            Cell nfa = null;
-            if (nfaStack.size() > 0) {
-                nfa = nfaStack.pop();
-            }
-            else {
-                nfa = nfaStatesArr[nextAlloc];
-                nextAlloc++;
-            }
+        public static StatePair constructNfaForOR(StatePair leftPair, StatePair rightPair) {
+            // State 2개 추가
+            StatePair pairOut = new StatePair(new State(stateIndex++), new State(stateIndex++));
 
-            nfa.clearState();
-            nfa.setState(nfaStates++);
-            nfa.setEdge(Cell.EPSILON);
+            // Arc 4개 추가
+            pairOut.getStartNode().makeEdge(leftPair.getStartNode(), State.EPSILON);
+            pairOut.getStartNode().makeEdge(rightPair.getStartNode(), State.EPSILON);
 
-            return nfa;
+            leftPair.getEndNode().makeEdge(pairOut.getEndNode(), State.EPSILON);
+            rightPair.getEndNode().makeEdge(pairOut.getEndNode(), State.EPSILON);
+
+            // 종결 상태 변경
+            leftPair.getEndNode().setEnd(false);
+            rightPair.getEndNode().setEnd(false);
+            pairOut.getEndNode().setEnd(true);
+
+            return pairOut;
         }
 
-        public void discardNfa(Cell nfaDiscarded) {
-            --nfaStates;
-            nfaDiscarded.clearState();
-            nfaStack.push(nfaDiscarded);
+        public static StatePair constructNfaForConnector(StatePair leftPair, StatePair rightPair) {
+            // State 0개, Arc 1개 추가
+            StatePair pairOut = new StatePair(leftPair.getStartNode(), rightPair.getEndNode());
+
+            // Arc 1개 추가
+            leftPair.getEndNode().makeEdge(rightPair.getStartNode(), State.EPSILON);
+
+            // 종결 상태 변경
+            leftPair.getEndNode().setEnd(false);
+            rightPair.getEndNode().setEnd(true);
+
+            return pairOut;
+        }
+
+        public static StatePair constructNfaForSingleCharacter(char c) {
+            // State 2개 추가
+            StatePair pairOut = new StatePair(new State(stateIndex++), new State(stateIndex++));
+
+            // Arc 1개 추가
+            pairOut.getStartNode().makeEdge(pairOut.getEndNode(), c);
+
+            // 종결 상태 변경
+            pairOut.getEndNode().setEnd(true);
+
+            return pairOut;
         }
     }
 }

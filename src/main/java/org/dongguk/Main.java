@@ -1,5 +1,6 @@
 package org.dongguk;
 
+import java.util.List;
 import java.util.Scanner;
 
 public class Main {
@@ -17,5 +18,11 @@ public class Main {
         dfa.setInformationByNFA(nfa.getGraph(), nfa.getSymbols());
         dfa.createDFA();
         dfa.printDFA();
+
+        ReduceDeterministicFiniteAutomata reduceDfa = new ReduceDeterministicFiniteAutomata();
+        reduceDfa.setInformationByDFA(dfa.getDFA(), dfa.getSymbols(), dfa.getEndStates());
+        reduceDfa.minimize();
+        reduceDfa.merge();
+        reduceDfa.printMFA();
     }
 }

@@ -15,7 +15,8 @@ public class DeterministicFiniteAutomata {
     private Map<Set<Integer>, Integer> map;
     private Set<Integer> tempset;
     private List<List<Integer>> dfa;
-    private List<Integer> endState;
+    private List<Integer> startStates;
+    private List<Integer> endStates;
     private int stateIndex = 0;
 
     public DeterministicFiniteAutomata() {
@@ -24,7 +25,8 @@ public class DeterministicFiniteAutomata {
         this.map = new HashMap<>();
         this.tempset = null;
         this.dfa = new ArrayList<>();
-        this.endState = new ArrayList<>();
+        this.startStates = new ArrayList<>();
+        this.endStates = new ArrayList<>();
     }
 
     public void setInformationByNFA(StatePair nfaPair, List<Character> symbols) {
@@ -32,12 +34,33 @@ public class DeterministicFiniteAutomata {
         this.symbols = symbols;
     }
 
+    public List<List<Integer>> getDFA() {
+        List<List<Integer>> reduceDfa = new ArrayList<>();
+        for (List<Integer> dfaLine : dfa) {
+            List<Integer> newDfaLine = new ArrayList<>();
+            for (Integer state : dfaLine) {
+                if (state == null) {
+                    newDfaLine.add(null);
+                    continue;
+                }
+
+                Set<Integer> set = getSet(state);
+                if (set == null || set.isEmpty())
+                    newDfaLine.add(null);
+                else
+                    newDfaLine.add(state);
+            }
+            reduceDfa.add(newDfaLine);
+        }
+        return reduceDfa;
+    }
+
     public void printDFA() {
         System.out.println();
         System.out.println("--------DFA--------");
         System.out.print("StateSet = { ");
         for (int i = 0; i < stateIndex; i++) {
-            String stateName = "q" + String.format("%03d", i);
+            String stateName = "q`" + String.format("%03d", i);
             if (i != stateIndex - 1)
                 System.out.print(stateName + ", ");
             else
@@ -52,6 +75,7 @@ public class DeterministicFiniteAutomata {
                 System.out.println(symbol + " }");
         });
 
+        List<List<Integer>> dfalist = getDFA();
         System.out.println("DeltaFunctions = { ");
 
         for (int i = 0; i < dfa.size(); i++) {
@@ -59,50 +83,34 @@ public class DeterministicFiniteAutomata {
 
             List<Integer> dfaLine = dfa.get(i);
             for (int j = 0; j < dfaLine.size(); j++) {
-                String nextName = (dfaLine.get(j) != null ? "q`" + String.format("%03d", dfaLine.get(j)) : "null");
+                if (dfaLine.get(j) == null) {
+                    continue;
+                }
+                String nextName = "q`" + String.format("%03d", dfaLine.get(j));
                 System.out.println("\t(" + stateName + ", " + symbols.get(j) + ") = { " + nextName + " }");
             }
         }
+        System.out.println("}");
+        makeStart();
+        System.out.print("StartStateSet = { ");
+        for (int startIndex : startStates) {
+            String endStateName = "q`" + String.format("%03d", startIndex);
+            if (startIndex != startStates.get(startStates.size() - 1))
+                System.out.print(endStateName + ", ");
+            else
+                System.out.println(endStateName + " }");
+        }
+        relocationStateVisited(graph.getStartNode());
+        makeEnd();
+        System.out.print("FinalStateSet = { ");
+        for (int endState : endStates) {
+            String endStateName = "q`" + String.format("%03d", endState);
+            if (endState != endStates.get(endStates.size() - 1))
+                System.out.print(endStateName + ", ");
+            else
+                System.out.println(endStateName + " }");
+        }
 
-//        List<List<Integer>> functions = new ArrayList<>();
-//        for (int i = 0; i < stateIndex; i++) {
-//            functions.add(new ArrayList<>());
-//        }
-//
-//        for (Map.Entry<Set<Integer>, Integer> entry : map.entrySet()) {
-//            List<Integer> dfaLine = dfa.get(entry.getValue());
-//            for (int i = 0; i < dfaLine.size(); i++) {
-//                functions.get(entry.getValue()).add(dfaLine.get(i));
-//                String nextName = (dfaLine.get(i) != null ? "q`" + String.format("%03d", dfaLine.get(i)) : "null");
-//            }
-//        }
-//
-//        for (Map.Entry<Set<Integer>, Integer> entry : map.entrySet()) {
-//            String stateName = "q`" + String.format("%03d", entry.getValue());
-//
-//            List<Integer> dfaLine = dfa.get(entry.getValue());
-//            for (int i = 0; i < dfaLine.size(); i++) {
-//                functions.get(entry.getValue()).add(dfaLine.get(i));
-//                String nextName = (dfaLine.get(i) != null ? "q`" + String.format("%03d", dfaLine.get(i)) : "null");
-//                System.out.println("\t(" + stateName + ", " + symbols.get(i) + ") = { " + nextName + " }");
-//            }
-//        }
-
-//        for (Map.Entry<Set<Integer>, Integer> entry : map.entrySet()) {
-//            String stateName = "q`" + String.format("%03d", entry.getValue());
-//
-//            List<Integer> dfaLine = dfa.get(entry.getValue());
-//            for (int i = 0; i < dfaLine.size(); i++) {
-//
-//                String nextName = (dfaLine.get(i) != null ? "q`" + String.format("%03d", dfaLine.get(i)) : "null");
-//                System.out.println("\t(" + stateName + ", " + symbols.get(i) + ") = { " + nextName + " }");
-//            }
-//        }
-//        System.out.println("}");
-
-//        for (Map.Entry<Set<Integer>, Integer> entry : map.entrySet()) {
-//            System.out.println((char)entry.getValue().intValue() +" = " + entry.getKey() + (isStart(entry.getKey())?" START ":"") + (isEnd(entry.getKey())?" END ":"") );
-//        }
         System.out.println("--------DFA--------");
     }
 
@@ -249,22 +257,30 @@ public class DeterministicFiniteAutomata {
         return null;
     }
 
-    private boolean isStart(Set<Integer> set) {
-        for (Integer integer : set) {
-            if(integer == graph.getStartNode().getIndex())
-                return true;
-        }
-        return false;
-    }
+    private void makeStart() {
+        for (Map.Entry<Set<Integer>, Integer> entry : map.entrySet()) {
+            if(entry.getValue() == -1)
+                continue;
 
-    private boolean isEnd(Set<Integer> set) {
-        for (Integer integer : set) {
-            if(integer == graph.getEndNode().getIndex()) {
-                endState.add((getCharacter(set).intValue()));
-                return true;
+            for (Integer integer : entry.getKey()) {
+                if(integer == graph.getStartNode().getIndex()) {
+                    startStates.add((getCharacter(entry.getKey()).intValue()));
+                }
             }
         }
-        return false;
+    }
+
+    private void makeEnd() {
+        for (Map.Entry<Set<Integer>, Integer> entry : map.entrySet()) {
+            if(entry.getValue() == -1)
+                continue;
+
+            for (Integer integer : entry.getKey()) {
+                if(integer == graph.getEndNode().getIndex()) {
+                    endStates.add((getCharacter(entry.getKey()).intValue()));
+                }
+            }
+        }
     }
 
     private Integer getCharacter(Set<Integer> set) {
